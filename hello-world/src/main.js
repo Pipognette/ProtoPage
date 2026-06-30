@@ -336,10 +336,14 @@ function statusIcon(kind) {
 function valueTag(text, count, conflict) {
   return `
     <span class="value-tag">
-      ${conflict ? `<span class="conflict-mark">${icon.alert}</span>` : icon.claims}
-      <span class="value-text">${text}</span>
-      ${count ? `<span class="value-count">+${count}</span>` : ''}
-      ${icon.chevronDown}
+      <span class="value-tag-left">
+        ${conflict ? `<span class="conflict-mark">${icon.alert}</span>` : icon.claims}
+        <span class="value-text">${text}</span>
+      </span>
+      <span class="value-tag-right">
+        ${count ? `<span class="value-count">+${count}</span>` : ''}
+        ${icon.chevronDown}
+      </span>
     </span>
   `;
 }
@@ -353,11 +357,11 @@ function valueSelect(text) {
 }
 
 function fieldRow({ indent, kind, label, value, status }) {
-  const indentStyle = `padding-left:${indent * 1.5}rem`;
+  const indentStyle = `padding-left:${0.85 + indent * 1.6}rem`;
   const groupIcon = kind === 'group-open' ? icon.minus : kind === 'group-closed' ? icon.plus : '';
   return `
     <tr class="field-row">
-      <td class="field-name" style="${indentStyle}">
+      <td class="field-name${indent > 0 ? ' grouped' : ''}" style="${indentStyle}">
         ${groupIcon ? `<span class="group-toggle">${groupIcon}</span>` : ''}
         <span>${label}</span>
       </td>
@@ -513,7 +517,7 @@ function renderClaimDetail(claim, index, activeTab) {
             ${statusBadge(claim.status, null)}
             <span class="percent-chip">${icon.clock}${d.percent}%</span>
           </div>
-          ${assigneeChip(claim.assignee || d.memberName, false)}
+          <span class="assignee-chip-lg">${assigneeChip(claim.assignee || d.memberName, false)}</span>
         </div>
 
         <div class="detail-grid">
@@ -524,7 +528,7 @@ function renderClaimDetail(claim, index, activeTab) {
             </div>
             <div class="chips" style="margin: 0.875rem 0 1rem;">
               <span class="chip static">All Fields <span class="chip-count">${d.fieldsCount}</span></span>
-              <span class="chip static">All Issues <span class="chip-count">${d.issuesCount}</span></span>
+              <span class="chip static">All Issues <span class="chip-count issues">${d.issuesCount}</span></span>
             </div>
             <div class="fields-pane-body">
               ${activeTab === 'lines' ? renderServiceLinesTab(d) : renderFieldsTab(d)}
