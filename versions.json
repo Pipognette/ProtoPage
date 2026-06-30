@@ -2,9 +2,9 @@
   {
     "branch": "qantev-proto",
     "app": "hello-world",
-    "lastDeploy": "2026-06-30T22:46:52+02:00",
-    "commit": "9e4b91e",
-    "message": "Fix Pages base path for project sites missing the repo-name prefix",
+    "lastDeploy": "2026-06-30T23:08:02+02:00",
+    "commit": "703c1c5",
+    "message": "Add claim detail page with hash-based routing",
     "url": "/ProtoPage/qantev-proto/hello-world/"
   }
 ]
