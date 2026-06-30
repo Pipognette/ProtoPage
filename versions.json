@@ -2,9 +2,9 @@
   {
     "branch": "qantev-proto",
     "app": "hello-world",
-    "lastDeploy": "2026-06-30T22:40:37+02:00",
-    "commit": "70c3a11",
-    "message": "Build static Claims UI mock for hello-world",
-    "url": "/qantev-proto/hello-world/"
+    "lastDeploy": "2026-06-30T22:46:52+02:00",
+    "commit": "9e4b91e",
+    "message": "Fix Pages base path for project sites missing the repo-name prefix",
+    "url": "/ProtoPage/qantev-proto/hello-world/"
   }
 ]
