@@ -1,0 +1,261 @@
+name: Deploy to GitHub Pages
+
+# Triggers on any branch push except gh-pages itself.
+#
+# main branch  → updates the portal home page only (no app build)
+# other branch → auto-detects which top-level app folders changed,
+#                builds each one (Vite or Angular), deploys to
+#                /{branch}/{app}/ on gh-pages, updates versions.json
+
+on:
+  push:
+    branches-ignore:
+      - gh-pages
+
+permissions:
+  contents: write
+
+jobs:
+
+  # ── Build + deploy apps for non-main branches ──────────────────────────────
+  deploy-app:
+    name: Deploy apps
+    if: github.ref_name != 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # need HEAD~1 to diff changed files
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Detect which top-level app folders have changed in this push.
+      # Falls back to all app folders on a branch's very first commit.
+      # Skips infrastructure folders that are never deployable apps.
+      - name: Detect changed app folders
+        id: detect
+        run: |
+          # Add any other non-app folders you don't want auto-built.
+          SKIP="^(\.github|home|scripts|docs|node_modules)$"
+
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          else
+            CHANGED=$(git ls-tree --name-only -r HEAD | grep '/')
+          fi
+
+          APPS=$(echo "$CHANGED" \
+            | grep '/' \
+            | cut -d/ -f1 \
+            | sort -u \
+            | grep -vE "$SKIP" || true)
+
+          # Filter to only folders that actually have a package.json
+          BUILDABLE=""
+          for APP in $APPS; do
+            if [ -f "$APP/package.json" ]; then
+              BUILDABLE="$BUILDABLE $APP"
+            fi
+          done
+          BUILDABLE="${BUILDABLE# }"
+
+          echo "apps=$BUILDABLE" >> "$GITHUB_OUTPUT"
+          echo "Detected apps to build: ${BUILDABLE:-none}"
+
+          # Detect deleted app folders: had package.json in HEAD~1, gone now
+          DELETED=""
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            for PREV_APP in $(git ls-tree --name-only HEAD~1 | grep -vE "$SKIP" || true); do
+              if git cat-file -e "HEAD~1:$PREV_APP/package.json" 2>/dev/null \
+                 && [ ! -f "$PREV_APP/package.json" ]; then
+                DELETED="$DELETED $PREV_APP"
+              fi
+            done
+          fi
+          DELETED="${DELETED# }"
+          echo "deleted=$DELETED" >> "$GITHUB_OUTPUT"
+          echo "Detected deleted apps: ${DELETED:-none}"
+
+      - name: Build and deploy changed apps
+        if: steps.detect.outputs.apps != '' || steps.detect.outputs.deleted != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          TIMESTAMP: ${{ github.event.head_commit.timestamp }}
+          APPS: ${{ steps.detect.outputs.apps }}
+          DELETED: ${{ steps.detect.outputs.deleted }}
+          # GitHub Pages URL for this repo. For a project site this is
+          #   https://<owner>.github.io/<repo>/
+          # For a user/org site (<owner>.github.io repo), the path is just
+          #   https://<owner>.github.io/  — adjust the suffix accordingly.
+          PAGES_URL_BASE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: |
+          set -e
+          REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
+
+          # ── Clone gh-pages or bootstrap it ──────────────────────────────
+          if git ls-remote --exit-code --heads origin gh-pages > /dev/null 2>&1; then
+            git clone --depth 1 --branch gh-pages "$REPO_URL" ./deploy
+          else
+            mkdir ./deploy && cd ./deploy
+            git init
+            git remote add origin "$REPO_URL"
+            git checkout -b gh-pages
+            touch .nojekyll
+            echo '[]' > versions.json
+            cd ..
+          fi
+          touch ./deploy/.nojekyll
+
+          # ── Build and copy each changed app ─────────────────────────────
+          for APP in $APPS; do
+            echo ""
+            echo "===== Building: $APP ====="
+
+            # Detect app type
+            if [ -f "$APP/angular.json" ]; then
+              APP_TYPE="angular"
+            elif ls "$APP"/vite.config.* > /dev/null 2>&1; then
+              APP_TYPE="vite"
+            else
+              echo "Skipping $APP — unknown build system (no angular.json or vite.config.*)"
+              continue
+            fi
+            echo "Type: $APP_TYPE"
+
+            BASE_HREF="/${BRANCH}/${APP}/"
+
+            if [ "$APP_TYPE" = "angular" ]; then
+              # ── Angular build ──────────────────────────────────────────
+              cd "$APP"
+              npm ci
+              npm run build -- --base-href "$BASE_HREF" --no-progress
+
+              # Angular 17+ outputs to dist/browser/ by default.
+              # If the project set outputPath.browser = "" it lands in dist/.
+              if [ -d "dist/browser" ]; then
+                DIST="dist/browser"
+              else
+                DIST="dist"
+              fi
+
+              # SPA fallback: GitHub Pages serves 404.html for unknown paths.
+              # This catches any direct-link or refresh on an Angular route.
+              cp "$DIST/index.html" "$DIST/404.html"
+              cd ..
+
+            else
+              # ── Vite build ─────────────────────────────────────────────
+              cd "$APP"
+              pnpm install
+              VITE_BASE_PATH="$BASE_HREF" pnpm build
+              DIST="dist"
+              cd ..
+            fi
+
+            # Copy built output into the gh-pages deploy tree
+            mkdir -p "./deploy/${BRANCH}/${APP}"
+            cp -r "$APP/$DIST/." "./deploy/${BRANCH}/${APP}/"
+
+            # Update versions.json (one entry per branch+app pair)
+            MSG="$(git log -1 --pretty=%s | head -c 72)"
+            APP="$APP" BRANCH="$BRANCH" SHA="$SHA" TIMESTAMP="$TIMESTAMP" MSG="$MSG" \
+              node scripts/update-versions.js
+
+            echo "Built: ${PAGES_URL_BASE}/${BRANCH}/${APP}/"
+          done
+
+          # ── Remove deleted app folders from gh-pages ─────────────────────
+          for APP in $DELETED; do
+            if [ -d "./deploy/${BRANCH}/${APP}" ]; then
+              echo "Removing stale deployment: ${BRANCH}/${APP}"
+              rm -rf "./deploy/${BRANCH}/${APP}"
+              node -e "
+                const fs = require('fs');
+                const p = './deploy/versions.json';
+                let v = JSON.parse(fs.readFileSync(p, 'utf8'));
+                v = v.filter(e => e.app && !(e.branch === '${BRANCH}' && e.app === '${APP}'));
+                fs.writeFileSync(p, JSON.stringify(v, null, 2));
+                console.log('Removed ${APP} from versions.json');
+              "
+            fi
+          done
+
+          # ── Commit and push to gh-pages ──────────────────────────────────
+          cd ./deploy
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "Nothing new to deploy."
+          else
+            git commit -m "Deploy ${BRANCH} @ ${SHA:0:7}"
+            git push origin HEAD:gh-pages
+          fi
+
+      - name: Summary
+        if: steps.detect.outputs.apps != ''
+        env:
+          PAGES_URL_BASE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: |
+          echo ""
+          echo "Portal: ${PAGES_URL_BASE}/"
+          for APP in ${{ steps.detect.outputs.apps }}; do
+            echo "  $APP: ${PAGES_URL_BASE}/${{ github.ref_name }}/${APP}/"
+          done
+          echo ""
+
+      - name: No apps detected
+        if: steps.detect.outputs.apps == ''
+        run: echo "No deployable app folders changed in this push — skipping build."
+
+  # ── Deploy the portal home page (main branch only) ─────────────────────────
+  deploy-home:
+    name: Deploy home page
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Publish home page to gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+        run: |
+          REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
+
+          if git ls-remote --exit-code --heads origin gh-pages > /dev/null 2>&1; then
+            git clone --depth 1 --branch gh-pages "$REPO_URL" ./deploy
+          else
+            mkdir ./deploy && cd ./deploy
+            git init
+            git remote add origin "$REPO_URL"
+            git checkout -b gh-pages
+            echo '[]' > versions.json
+            cd ..
+          fi
+
+          touch ./deploy/.nojekyll
+          cp home/index.html ./deploy/index.html
+
+          cd ./deploy
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "Home page unchanged."
+          else
+            git commit -m "Update home page @ ${SHA:0:7}"
+            git push origin HEAD:gh-pages
+          fi
