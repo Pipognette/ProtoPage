@@ -11,6 +11,7 @@ const app       = process.env.APP       || 'app';
 const timestamp = process.env.TIMESTAMP || new Date().toISOString();
 const sha       = process.env.SHA       || '';
 const message   = (process.env.MSG      || '').substring(0, 72);
+const pathPrefix = process.env.PATH_PREFIX || '';
 
 let versions = [];
 try { versions = JSON.parse(fs.readFileSync(versionsPath, 'utf8')); } catch (_) {}
@@ -27,7 +28,7 @@ versions.unshift({
   lastDeploy: timestamp,
   commit: sha ? sha.substring(0, 7) : '',
   message,
-  url: `/${branch}/${app}/`,
+  url: `${pathPrefix}/${branch}/${app}/`,
 });
 versions.sort((a, b) => new Date(b.lastDeploy) - new Date(a.lastDeploy));
 

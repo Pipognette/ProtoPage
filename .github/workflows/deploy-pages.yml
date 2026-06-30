@@ -99,9 +99,20 @@ jobs:
           # For a user/org site (<owner>.github.io repo), the path is just
           #   https://<owner>.github.io/  — adjust the suffix accordingly.
           PAGES_URL_BASE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          REPO_OWNER: ${{ github.repository_owner }}
         run: |
           set -e
           REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
+
+          # Project sites (most repos) are served under /<repo>/. User/org
+          # sites (a repo literally named <owner>.github.io) are served at
+          # the domain root, with no extra path segment.
+          if [ "$REPO_NAME" = "${REPO_OWNER}.github.io" ]; then
+            PAGES_PATH_PREFIX=""
+          else
+            PAGES_PATH_PREFIX="/${REPO_NAME}"
+          fi
 
           # ── Clone gh-pages or bootstrap it ──────────────────────────────
           if git ls-remote --exit-code --heads origin gh-pages > /dev/null 2>&1; then
@@ -133,7 +144,7 @@ jobs:
             fi
             echo "Type: $APP_TYPE"
 
-            BASE_HREF="/${BRANCH}/${APP}/"
+            BASE_HREF="${PAGES_PATH_PREFIX}/${BRANCH}/${APP}/"
 
             if [ "$APP_TYPE" = "angular" ]; then
               # ── Angular build ──────────────────────────────────────────
@@ -170,6 +181,7 @@ jobs:
             # Update versions.json (one entry per branch+app pair)
             MSG="$(git log -1 --pretty=%s | head -c 72)"
             APP="$APP" BRANCH="$BRANCH" SHA="$SHA" TIMESTAMP="$TIMESTAMP" MSG="$MSG" \
+              PATH_PREFIX="$PAGES_PATH_PREFIX" \
               node scripts/update-versions.js
 
             echo "Built: ${PAGES_URL_BASE}/${BRANCH}/${APP}/"
