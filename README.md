@@ -1,4 +1,4 @@
-# Deploy Pages template
+# Qantev Pages template
 
 A minimal scaffolding for hosting multiple prototype apps on GitHub Pages with one workflow.
 
