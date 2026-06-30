@@ -1,0 +1,10 @@
+[
+  {
+    "branch": "qantev-proto",
+    "app": "hello-world",
+    "lastDeploy": "2026-06-30T22:19:56+02:00",
+    "commit": "1b006b4",
+    "message": "Flatten personal-template into repo root and add Pages deploy workflow",
+    "url": "/qantev-proto/hello-world/"
+  }
+]
