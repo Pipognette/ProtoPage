@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deploy Portal</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+      background: #f5f5f5;
+      color: #111;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #fff;
+      border-bottom: 1px solid #e5e5e5;
+      padding: 1.125rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.875rem;
+      flex-shrink: 0;
+    }
+    header .logo  { font-weight: 700; font-size: 1rem; letter-spacing: -0.02em; }
+    header .slash { color: #ccc; }
+    header .title { font-size: 0.9375rem; color: #555; }
+
+    main {
+      flex: 1;
+      padding: 2rem 2rem 3rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2.5rem;
+    }
+
+    .section-label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #aaa;
+      margin-bottom: 0.75rem;
+    }
+
+    .table-section { width: 100%; }
+
+    .table-wrap {
+      background: #fff;
+      border: 1px solid #e5e5e5;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .table-scroll {
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #999;
+      text-align: left;
+      background: #fafafa;
+      border-bottom: 1px solid #ebebeb;
+    }
+
+    th:nth-child(1) { width: 16%; }  /* branch   */
+    th:nth-child(2) { width: 18%; }  /* app      */
+    th:nth-child(3) { width: 13%; }  /* deployed */
+    th:nth-child(4) { width: 9%;  }  /* commit   */
+    th:nth-child(5) { width: auto; } /* message  */
+    th:nth-child(6) { width: 100px; text-align: right; }
+
+    tbody tr {
+      border-bottom: 1px solid #f3f3f3;
+      transition: background 0.1s;
+      cursor: pointer;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f9f9f9; }
+
+    td {
+      padding: 0.9rem 1.25rem;
+      font-size: 0.875rem;
+      vertical-align: middle;
+    }
+
+    .branch-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 600;
+    }
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #22c55e;
+      flex-shrink: 0;
+    }
+
+    .app-chip {
+      display: inline-block;
+      font-family: 'SF Mono', 'Consolas', monospace;
+      font-size: 0.75rem;
+      background: #f0f0f0;
+      color: #444;
+      padding: 0.2rem 0.55rem;
+      border-radius: 5px;
+    }
+
+    .commit-sha {
+      font-family: 'SF Mono', 'Consolas', monospace;
+      font-size: 0.75rem;
+      color: #bbb;
+    }
+
+    .msg {
+      color: #666;
+      font-size: 0.8125rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .time { color: #aaa; font-size: 0.8125rem; }
+
+    .open-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.375rem;
+      padding: 0.4375rem 1rem;
+      background: #111;
+      color: #fff;
+      border-radius: 7px;
+      text-decoration: none;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      transition: background 0.15s;
+      white-space: nowrap;
+      float: right;
+    }
+    .open-btn:hover { background: #333; }
+    .open-btn svg {
+      width: 11px; height: 11px;
+      stroke: currentColor; fill: none;
+      stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    .empty-state {
+      padding: 3rem 2rem;
+      text-align: center;
+      color: #bbb;
+    }
+    .empty-state p { font-size: 0.9375rem; }
+    .empty-state small { font-size: 0.8125rem; margin-top: 0.375rem; display: block; }
+
+    @media (max-width: 700px) {
+      main { padding: 1.25rem 1rem 2rem; }
+      td:nth-child(4), th:nth-child(4),
+      td:nth-child(5), th:nth-child(5) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="logo">Deploy Portal</span>
+    <span class="slash">·</span>
+    <span class="title">Live versions</span>
+  </header>
+
+  <main>
+    <section class="table-section">
+      <p class="section-label">Live versions</p>
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Branch</th>
+                <th>App</th>
+                <th>Last deployed</th>
+                <th>Commit</th>
+                <th>Note</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="6"><div class="empty-state"><p>Loading&hellip;</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function timeAgo(iso) {
+      if (!iso) return '—';
+      const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
+      if (diff < 60)     return 'just now';
+      if (diff < 3600)   return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400)  return Math.floor(diff / 3600) + 'h ago';
+      if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+      return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    }
+
+    const arrowSvg = `<svg viewBox="0 0 24 24"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>`;
+
+    function esc(s) {
+      return String(s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    async function load() {
+      const tbody = document.getElementById('tbody');
+      try {
+        const res = await fetch('./versions.json?t=' + Date.now());
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const versions = await res.json();
+
+        if (!Array.isArray(versions) || !versions.length) {
+          tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+            <p>No versions deployed yet.</p>
+            <small>Push to any branch (other than main) to create the first version.</small>
+          </div></td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = versions.map(v => `
+          <tr onclick="window.open('${esc(v.url)}','_blank')">
+            <td><span class="branch-badge"><span class="status-dot"></span>${esc(v.branch)}</span></td>
+            <td><span class="app-chip">${esc(v.app)}</span></td>
+            <td><span class="time">${timeAgo(v.lastDeploy)}</span></td>
+            <td><span class="commit-sha">${esc(v.commit || '—')}</span></td>
+            <td><span class="msg" title="${esc(v.message||'')}">${esc(v.message || '—')}</span></td>
+            <td>
+              <a class="open-btn" href="${esc(v.url)}" target="_blank" onclick="event.stopPropagation()">
+                Open ${arrowSvg}
+              </a>
+            </td>
+          </tr>
+        `).join('');
+      } catch(err) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+          <p>Could not load versions.</p><small>${esc(String(err))}</small>
+        </div></td></tr>`;
+      }
+    }
+
+    load();
+  </script>
+
+</body>
+</html>
